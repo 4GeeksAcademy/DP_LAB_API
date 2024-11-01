@@ -27,13 +27,17 @@ export const Navbar = () => {
 
 				<div className="links-section">
 					<Link to="/demo">
-						{store.auth === true ? <button className="btn " id="button" onClick={() => handleLogout()}>Pedidos</button> : ''}
+						{store.auth === false ? <button className="btn " id="button" onClick={() => handleLogout()}>Pedidos</button> : ''}
 					</Link>
 					<Link to="/demo">
-						{store.auth === true ? <button className="btn" id="button" onClick={() => handleLogout()}>Facturas</button> : ''}
+						{store.auth === false ? <button className="btn" id="button" onClick={() => handleLogout()}>Facturas</button> : ''}
 					</Link>
 					<Link to="/demo">
-						{store.auth === true ? <button className="btn" id="button" onClick={() => handleLogout()}>Cambiar estados</button> : ''}
+						{store.auth === false ? <button className="btn" id="button" onClick={() => handleLogout()}>Cambiar estados</button> : ''}
+
+					</Link>
+					<Link to="/customers">
+						{store.auth === false ? <button className="btn" id="button" onClick={() => handleLogout()}>Clientes</button> : ''}
 
 					</Link>
 
