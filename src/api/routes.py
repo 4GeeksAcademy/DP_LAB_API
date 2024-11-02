@@ -1,189 +1,491 @@
-"""
-This module takes care of starting the API Server, Loading the DB and Adding the endpoints
-"""
-from flask import Flask, request, jsonify, url_for, Blueprint
-from api.models import db, Customer, User, Billing, Shipping, Order
-from api.utils import generate_sitemap, APIException
+from flask import Flask, request, jsonify, Blueprint
+from api.models import db, Customer, Order, LineItem, TaxLine, ShippingLine, FeeLine, CouponLine, Refund, Billing, Shipping, User
 from flask_cors import CORS
-from flask_jwt_extended import create_access_token
-from flask_jwt_extended import get_jwt_identity
-from flask_jwt_extended import jwt_required
-from flask_jwt_extended import JWTManager
-import os
-from dotenv import load_dotenv
 from woocommerce import API
-import requests
-# import logging
+from dotenv import load_dotenv
+import os
 
 load_dotenv()
-# logging.basicConfig(level=logging.DEBUG)
 
 api = Blueprint('api', __name__)
 
 # Allow CORS requests to this API
-CORS(api)
+CORS(api, resources={r"/api/*": {"origins": "*"}})
+
 database_url = os.getenv('DATABASE_URL')
 consumer_key = os.getenv('WC_CONSUMER_KEY')
 consumer_secret = os.getenv('WC_CONSUMER_SECRET')
-# # logging.debug(f"Consumer Key: {consumer_key}")
-# # logging.debug(f"Consumer Secret: {consumer_secret}")
 
 wcapi = API(
-    url="https://imprimefotografia.es",  
-    consumer_key=os.getenv('WC_CONSUMER_KEY'),  
-    consumer_secret=os.getenv('WC_CONSUMER_SECRET'), 
+    url="https://piedrapapelytijeras.es",  
+    consumer_key=consumer_key,  
+    consumer_secret=consumer_secret, 
     version="wc/v3"
 )
 
-
-@api.route('/import_customers', methods=['GET'])
+@api.route("/import_customers", methods=["GET"])
 def import_customers():
     try:
-        response = wcapi.get("customers")
-
+        response = wcapi.get("customers", params={"timeout": 30})
+        
         if response.status_code != 200:
-            return jsonify({"msg": f"Error al importar customers: {response.text}"}), 400
-
+            return jsonify({"msg": f"Error al importar clientes: {response.text}"}), 401
+        
         wc_customers = response.json()
 
         if not isinstance(wc_customers, list):
             return jsonify({"msg": "Error: formato de respuesta inesperado"}), 400
 
         for wc_customer in wc_customers:
-            existing_customer = Customer.query.filter_by(email=wc_customer["email"]).first()
+            existing_customer = Customer.query.filter_by(id=wc_customer["id"]).first()
 
             if existing_customer:
-                # Actualizar el cliente existente
-                existing_customer.first_name = wc_customer.get("first_name", "")
-                existing_customer.last_name = wc_customer.get("last_name", "")
-                existing_customer.username = wc_customer.get("username", "")
-                existing_customer.is_paying_customer = wc_customer.get("is_paying_customer", False)
-
-                # Actualizar datos de facturación
-                billing_data = wc_customer.get("billing", {})
-                if existing_customer.billing:
-                    existing_customer.billing.first_name = billing_data.get("first_name", "")
-                    existing_customer.billing.last_name = billing_data.get("last_name", "")
-                    existing_customer.billing.company = billing_data.get("company", "")
-                    existing_customer.billing.address_1 = billing_data.get("address_1", "")
-                    existing_customer.billing.address_2 = billing_data.get("address_2", "")
-                    existing_customer.billing.city = billing_data.get("city", "")
-                    existing_customer.billing.state = billing_data.get("state", "")
-                    existing_customer.billing.postcode = billing_data.get("postcode", "")
-                    existing_customer.billing.country = billing_data.get("country", "")
-                    existing_customer.billing.email = billing_data.get("email", "")
-                    existing_customer.billing.phone = billing_data.get("phone", "")
-                else:
-                    billing = Billing(
-                        first_name=billing_data.get("first_name", ""),
-                        last_name=billing_data.get("last_name", ""),
-                        company=billing_data.get("company", ""),
-                        address_1=billing_data.get("address_1", ""),
-                        address_2=billing_data.get("address_2", ""),
-                        city=billing_data.get("city", ""),
-                        state=billing_data.get("state", ""),
-                        postcode=billing_data.get("postcode", ""),
-                        country=billing_data.get("country", ""),
-                        email=billing_data.get("email", ""),
-                        phone=billing_data.get("phone", "")
-                    )
-                    db.session.add(billing)
-                    db.session.flush()
-                    existing_customer.billing_id = billing.id
-
-                # Actualizar datos de envío
-                shipping_data = wc_customer.get("shipping", {})
-                if existing_customer.shipping:
-                    existing_customer.shipping.first_name = shipping_data.get("first_name", "")
-                    existing_customer.shipping.last_name = shipping_data.get("last_name", "")
-                    existing_customer.shipping.company = shipping_data.get("company", "")
-                    existing_customer.shipping.address_1 = shipping_data.get("address_1", "")
-                    existing_customer.shipping.address_2 = shipping_data.get("address_2", "")
-                    existing_customer.shipping.city = shipping_data.get("city", "")
-                    existing_customer.shipping.state = shipping_data.get("state", "")
-                    existing_customer.shipping.postcode = shipping_data.get("postcode", "")
-                    existing_customer.shipping.country = shipping_data.get("country", "")
-                else:
-                    shipping = Shipping(
-                        first_name=shipping_data.get("first_name", ""),
-                        last_name=shipping_data.get("last_name", ""),
-                        company=shipping_data.get("company", ""),
-                        address_1=shipping_data.get("address_1", ""),
-                        address_2=shipping_data.get("address_2", ""),
-                        city=shipping_data.get("city", ""),
-                        state=shipping_data.get("state", ""),
-                        postcode=shipping_data.get("postcode", ""),
-                        country=shipping_data.get("country", "")
-                    )
-                    db.session.add(shipping)
-                    db.session.flush()
-                    existing_customer.shipping_id = shipping.id
-
+                existing_customer.email = wc_customer["email"]
+                existing_customer.first_name = wc_customer["first_name"]
+                existing_customer.last_name = wc_customer["last_name"]
+                existing_customer.role = wc_customer["role"]
+                existing_customer.username = wc_customer["username"]
+                existing_customer.is_paying_customer = wc_customer["is_paying_customer"]
             else:
-                # Crear un nuevo cliente
-                billing_data = wc_customer.get("billing", {})
-                billing = Billing(
-                    first_name=billing_data.get("first_name", ""),
-                    last_name=billing_data.get("last_name", ""),
-                    company=billing_data.get("company", ""),
-                    address_1=billing_data.get("address_1", ""),
-                    address_2=billing_data.get("address_2", ""),
-                    city=billing_data.get("city", ""),
-                    state=billing_data.get("state", ""),
-                    postcode=billing_data.get("postcode", ""),
-                    country=billing_data.get("country", ""),
-                    email=billing_data.get("email", ""),
-                    phone=billing_data.get("phone", "")
-                )
-                db.session.add(billing)
-                db.session.flush()
-
-                shipping_data = wc_customer.get("shipping", {})
-                shipping = Shipping(
-                    first_name=shipping_data.get("first_name", ""),
-                    last_name=shipping_data.get("last_name", ""),
-                    company=shipping_data.get("company", ""),
-                    address_1=shipping_data.get("address_1", ""),
-                    address_2=shipping_data.get("address_2", ""),
-                    city=shipping_data.get("city", ""),
-                    state=shipping_data.get("state", ""),
-                    postcode=shipping_data.get("postcode", ""),
-                    country=shipping_data.get("country", "")
-                )
-                db.session.add(shipping)
-                db.session.flush()
-
                 new_customer = Customer(
+                    id=wc_customer["id"],
                     email=wc_customer["email"],
+                    first_name=wc_customer["first_name"],
+                    last_name=wc_customer["last_name"],
+                    role=wc_customer["role"],
+                    username=wc_customer["username"],
                     password="default_password",
-                    first_name=wc_customer.get("first_name", ""),
-                    last_name=wc_customer.get("last_name", ""),
-                    role="customer",
-                    username=wc_customer.get("username", ""),
-                    billing_id=billing.id,
-                    shipping_id=shipping.id,
-                    is_paying_customer=wc_customer.get("is_paying_customer", False),
+                    is_paying_customer=wc_customer["is_paying_customer"]
                 )
                 db.session.add(new_customer)
 
+            billing_info = wc_customer.get("billing", {})
+            if billing_info:
+                billing = Billing.query.filter_by(id=existing_customer.billing_id).first() if existing_customer else None
+                if billing:
+                    billing.first_name = billing_info["first_name"]
+                    billing.last_name = billing_info["last_name"]
+                    billing.company = billing_info.get("company")
+                    billing.address_1 = billing_info.get("address_1", "")
+                    billing.address_2 = billing_info.get("address_2", "")
+                    billing.city = billing_info.get("city", "")
+                    billing.state = billing_info.get("state", "")
+                    billing.postcode = billing_info.get("postcode", "")
+                    billing.country = billing_info.get("country", "")
+                    billing.email = billing_info.get("email", "")
+                    billing.phone = billing_info.get("phone", "")
+                else:
+                    new_billing = Billing(
+                        first_name=billing_info["first_name"],
+                        last_name=billing_info["last_name"],
+                        company=billing_info.get("company"),
+                        address_1=billing_info.get("address_1", ""),
+                        address_2=billing_info.get("address_2", ""),
+                        city=billing_info.get("city", ""),
+                        state=billing_info.get("state", ""),
+                        postcode=billing_info.get("postcode", ""),
+                        country=billing_info.get("country", ""),
+                        email=billing_info.get("email", ""),
+                        phone=billing_info.get("phone", "")
+                    )
+                    db.session.add(new_billing)
+                    if existing_customer:
+                        existing_customer.billing = new_billing
+                    else:
+                        new_customer.billing = new_billing
+
+            shipping_info = wc_customer.get("shipping", {})
+            if shipping_info:
+                shipping = Shipping.query.filter_by(id=existing_customer.shipping_id).first() if existing_customer else None
+                if shipping:
+                    shipping.first_name = shipping_info["first_name"]
+                    shipping.last_name = shipping_info["last_name"]
+                    shipping.company = shipping_info.get("company")
+                    shipping.address_1 = shipping_info.get("address_1", "")
+                    shipping.address_2 = shipping_info.get("address_2", "")
+                    shipping.city = shipping_info.get("city", "")
+                    shipping.state = shipping_info.get("state", "")
+                    shipping.postcode = shipping_info.get("postcode", "")
+                    shipping.country = shipping_info.get("country", "")
+                else:
+                    new_shipping = Shipping(
+                        first_name=shipping_info["first_name"],
+                        last_name=shipping_info["last_name"],
+                        company=shipping_info.get("company"),
+                        address_1=shipping_info.get("address_1", ""),
+                        address_2=shipping_info.get("address_2", ""),
+                        city=shipping_info.get("city", ""),
+                        state=shipping_info.get("state", ""),
+                        postcode=shipping_info.get("postcode", ""),
+                        country=shipping_info.get("country", "")
+                    )
+                    db.session.add(new_shipping)
+                    if existing_customer:
+                        existing_customer.shipping = new_shipping
+                    else:
+                        new_customer.shipping = new_shipping
+
         db.session.commit()
-        return jsonify({"msg": "Customers importados correctamente"}), 200
+        return jsonify({"msg": "Clientes importados y actualizados correctamente"}), 200
 
     except Exception as e:
-        return jsonify({"msg": f"Error al importar customers: {str(e)}"}), 500
-    
-@api.route('/customers', methods=['GET'])
-def list_customers():
+        return jsonify({"msg": f"Error al importar clientes: {str(e)}"}), 500
+
+@api.route("/import_orders", methods=["GET"])
+def import_orders():
     try:
-       
-        customers = Customer.query.all()
-        customers_serialized = [customer.serialize() for customer in customers]
+        response = wcapi.get("orders", params={"per_page": 100, "page": 1})
         
-        return jsonify(customers_serialized), 200
+        if response.status_code != 200:
+            return jsonify({"msg": f"Error al importar órdenes: {response.text}"}), 401
+        
+        wc_orders = response.json()
+
+        if not isinstance(wc_orders, list):
+            return jsonify({"msg": "Error: formato de respuesta inesperado"}), 400
+
+        for wc_order in wc_orders:
+            existing_order = Order.query.filter_by(id=wc_order["id"]).first()
+
+            if existing_order:
+                existing_order.parent_id = wc_order.get("parent_id", 0)
+                existing_order.number = wc_order["number"]
+                existing_order.order_key = wc_order["order_key"]
+                existing_order.created_via = wc_order["created_via"]
+                existing_order.version = wc_order["version"]
+                existing_order.status = wc_order["status"]
+                existing_order.currency = wc_order["currency"]
+                existing_order.date_modified = wc_order.get("date_modified")
+                existing_order.date_modified_gmt = wc_order.get("date_modified_gmt")
+                existing_order.discount_total = wc_order["discount_total"]
+                existing_order.discount_tax = wc_order["discount_tax"]
+                existing_order.shipping_total = wc_order["shipping_total"]
+                existing_order.shipping_tax = wc_order.get("shipping_tax")
+                existing_order.cart_tax = wc_order.get("cart_tax")
+                existing_order.total = wc_order["total"]
+                existing_order.total_tax = wc_order["total_tax"]
+                existing_order.prices_include_tax = wc_order["prices_include_tax"]
+                existing_order.customer_id = wc_order["customer_id"]
+                existing_order.customer_ip_address = wc_order.get("customer_ip_address")
+                existing_order.customer_user_agent = wc_order.get("customer_user_agent")
+                existing_order.customer_note = wc_order.get("customer_note")
+                existing_order.payment_method = wc_order["payment_method"]
+                existing_order.payment_method_title = wc_order.get("payment_method_title")
+                existing_order.transaction_id = wc_order.get("transaction_id")
+                existing_order.date_paid = wc_order.get("date_paid")
+                existing_order.date_paid_gmt = wc_order.get("date_paid_gmt")
+                existing_order.date_completed = wc_order.get("date_completed")
+                existing_order.date_completed_gmt = wc_order.get("date_completed_gmt")
+                existing_order.cart_hash = wc_order.get("cart_hash")
+                existing_order.set_paid = wc_order["set_paid"]
+                existing_order.billing_id = wc_order.get("billing_id")
+                existing_order.shipping_id = wc_order.get("shipping_id")
+            else:
+                new_order = Order(
+                    id=wc_order["id"],
+                    parent_id=wc_order.get("parent_id", 0),
+                    number=wc_order["number"],
+                    order_key=wc_order["order_key"],
+                    created_via=wc_order["created_via"],
+                    version=wc_order["version"],
+                    status=wc_order["status"],
+                    currency=wc_order["currency"],
+                    date_modified=wc_order.get("date_modified"),
+                    date_modified_gmt=wc_order.get("date_modified_gmt"),
+                    discount_total=wc_order["discount_total"],
+                    discount_tax=wc_order["discount_tax"],
+                    shipping_total=wc_order["shipping_total"],
+                    shipping_tax=wc_order.get("shipping_tax"),
+                    cart_tax=wc_order.get("cart_tax"),
+                    total=wc_order["total"],
+                    total_tax=wc_order["total_tax"],
+                    prices_include_tax=wc_order["prices_include_tax"],
+                    customer_id=wc_order["customer_id"],
+                    customer_ip_address=wc_order.get("customer_ip_address"),
+                    customer_user_agent=wc_order.get("customer_user_agent"),
+                    customer_note=wc_order.get("customer_note"),
+                    payment_method=wc_order["payment_method"],
+                    payment_method_title=wc_order.get("payment_method_title"),
+                    transaction_id=wc_order.get("transaction_id"),
+                    date_paid=wc_order.get("date_paid"),
+                    date_paid_gmt=wc_order.get("date_paid_gmt"),
+                    date_completed=wc_order.get("date_completed"),
+                    date_completed_gmt=wc_order.get("date_completed_gmt"),
+                    cart_hash=wc_order.get("cart_hash"),
+                    set_paid=wc_order["set_paid"],
+                    billing_id=wc_order.get("billing_id"),
+                    shipping_id=wc_order.get("shipping_id")
+                )
+                db.session.add(new_order)
+
+        db.session.commit()
+        return jsonify({"msg": "Órdenes importadas y actualizadas correctamente"}), 200
+
+    except Exception as e:
+        return jsonify({"msg": f"Error al importar órdenes: {str(e)}"}), 500
+
+@api.route("/import_line_items", methods=["GET"])
+def import_line_items():
+    try:
+        response = wcapi.get("line_items", params={"timeout": 30})
+        
+        if response.status_code != 200:
+            return jsonify({"msg": f"Error al importar line items: {response.text}"}), 401
+        
+        wc_line_items = response.json()
+
+        if not isinstance(wc_line_items, list):
+            return jsonify({"msg": "Error: formato de respuesta inesperado"}), 400
+
+        for wc_line_item in wc_line_items:
+            existing_line_item = LineItem.query.filter_by(id=wc_line_item["id"]).first()
+
+            if existing_line_item:
+                existing_line_item.name = wc_line_item["name"]
+                existing_line_item.product_id = wc_line_item["product_id"]
+                existing_line_item.variation_id = wc_line_item["variation_id"]
+                existing_line_item.quantity = wc_line_item["quantity"]
+                existing_line_item.tax_class = wc_line_item["tax_class"]
+                existing_line_item.subtotal = wc_line_item["subtotal"]
+                existing_line_item.subtotal_tax = wc_line_item["subtotal_tax"]
+                existing_line_item.total = wc_line_item["total"]
+                existing_line_item.total_tax = wc_line_item["total_tax"]
+                existing_line_item.price = wc_line_item["price"]
+            else:
+                new_line_item = LineItem(
+                    id=wc_line_item["id"],
+                    name=wc_line_item["name"],
+                    product_id=wc_line_item["product_id"],
+                    variation_id=wc_line_item["variation_id"],
+                    quantity=wc_line_item["quantity"],
+                    tax_class=wc_line_item["tax_class"],
+                    subtotal=wc_line_item["subtotal"],
+                    subtotal_tax=wc_line_item["subtotal_tax"],
+                    total=wc_line_item["total"],
+                    total_tax=wc_line_item["total_tax"],
+                    price=wc_line_item["price"]
+                )
+                db.session.add(new_line_item)
+
+        db.session.commit()
+        return jsonify({"msg": "Line items importados y actualizados correctamente"}), 200
+
+    except Exception as e:
+        return jsonify({"msg": f"Error al importar line items: {str(e)}"}), 500
+
+@api.route("/import_tax_lines", methods=["GET"])
+def import_tax_lines():
+    try:
+        response = wcapi.get("tax_lines", params={"timeout": 30})
+        
+        if response.status_code != 200:
+            return jsonify({"msg": f"Error al importar tax lines: {response.text}"}), 401
+        
+        wc_tax_lines = response.json()
+
+        if not isinstance(wc_tax_lines, list):
+            return jsonify({"msg": "Error: formato de respuesta inesperado"}), 400
+
+        for wc_tax_line in wc_tax_lines:
+            existing_tax_line = TaxLine.query.filter_by(id=wc_tax_line["id"]).first()
+
+            if existing_tax_line:
+                existing_tax_line.rate_code = wc_tax_line["rate_code"]
+                existing_tax_line.rate_id = wc_tax_line["rate_id"]
+                existing_tax_line.label = wc_tax_line["label"]
+                existing_tax_line.compound = wc_tax_line["compound"]
+                existing_tax_line.tax_total = wc_tax_line["tax_total"]
+                existing_tax_line.shipping_tax_total = wc_tax_line["shipping_tax_total"]
+            else:
+                new_tax_line = TaxLine(
+                    id=wc_tax_line["id"],
+                    rate_code=wc_tax_line["rate_code"],
+                    rate_id=wc_tax_line["rate_id"],
+                    label=wc_tax_line["label"],
+                    compound=wc_tax_line["compound"],
+                    tax_total=wc_tax_line["tax_total"],
+                    shipping_tax_total=wc_tax_line["shipping_tax_total"]
+                )
+                db.session.add(new_tax_line)
+
+        db.session.commit()
+        return jsonify({"msg": "Tax lines importados y actualizados correctamente"}), 200
+
+    except Exception as e:
+        return jsonify({"msg": f"Error al importar tax lines: {str(e)}"}), 500
+
+@api.route("/import_shipping_lines", methods=["GET"])
+def import_shipping_lines():
+    try:
+        response = wcapi.get("shipping_lines", params={"timeout": 30})
+        
+        if response.status_code != 200:
+            return jsonify({"msg": f"Error al importar shipping lines: {response.text}"}), 401
+        
+        wc_shipping_lines = response.json()
+
+        if not isinstance(wc_shipping_lines, list):
+            return jsonify({"msg": "Error: formato de respuesta inesperado"}), 400
+
+        for wc_shipping_line in wc_shipping_lines:
+            existing_shipping_line = ShippingLine.query.filter_by(id=wc_shipping_line["id"]).first()
+
+            if existing_shipping_line:
+                existing_shipping_line.method_title = wc_shipping_line["method_title"]
+                existing_shipping_line.method_id = wc_shipping_line["method_id"]
+                existing_shipping_line.total = wc_shipping_line["total"]
+                existing_shipping_line.total_tax = wc_shipping_line["total_tax"]
+            else:
+                new_shipping_line = ShippingLine(
+                    id=wc_shipping_line["id"],
+                    method_title=wc_shipping_line["method_title"],
+                    method_id=wc_shipping_line["method_id"],
+                    total=wc_shipping_line["total"],
+                    total_tax=wc_shipping_line["total_tax"]
+                )
+                db.session.add(new_shipping_line)
+
+        db.session.commit()
+        return jsonify({"msg": "Shipping lines importados y actualizados correctamente"}), 200
+
+    except Exception as e:
+        return jsonify({"msg": f"Error al importar shipping lines: {str(e)}"}), 500
+
+@api.route("/import_fee_lines", methods=["GET"])
+def import_fee_lines():
+    try:
+        response = wcapi.get("fee_lines", params={"timeout": 30})
+        
+        if response.status_code != 200:
+            return jsonify({"msg": f"Error al importar fee lines: {response.text}"}), 401
+        
+        wc_fee_lines = response.json()
+
+        if not isinstance(wc_fee_lines, list):
+            return jsonify({"msg": "Error: formato de respuesta inesperado"}), 400
+
+        for wc_fee_line in wc_fee_lines:
+            existing_fee_line = FeeLine.query.filter_by(id=wc_fee_line["id"]).first()
+
+            if existing_fee_line:
+                existing_fee_line.name = wc_fee_line["name"]
+                existing_fee_line.tax_class = wc_fee_line["tax_class"]
+                existing_fee_line.tax_status = wc_fee_line["tax_status"]
+                existing_fee_line.amount = wc_fee_line["amount"]
+                existing_fee_line.total = wc_fee_line["total"]
+                existing_fee_line.total_tax = wc_fee_line["total_tax"]
+            else:
+                new_fee_line = FeeLine(
+                    id=wc_fee_line["id"],
+                    name=wc_fee_line["name"],
+                    tax_class=wc_fee_line["tax_class"],
+                    tax_status=wc_fee_line["tax_status"],
+                    amount=wc_fee_line["amount"],
+                    total=wc_fee_line["total"],
+                    total_tax=wc_fee_line["total_tax"]
+                )
+                db.session.add(new_fee_line)
+
+        db.session.commit()
+        return jsonify({"msg": "Fee lines importados y actualizados correctamente"}), 200
+
+    except Exception as e:
+        return jsonify({"msg": f"Error al importar fee lines: {str(e)}"}), 500
+
+@api.route("/import_coupon_lines", methods=["GET"])
+def import_coupon_lines():
+    try:
+        response = wcapi.get("coupon_lines", params={"timeout": 30})
+        
+        if response.status_code != 200:
+            return jsonify({"msg": f"Error al importar coupon lines: {response.text}"}), 401
+        
+        wc_coupon_lines = response.json()
+
+        if not isinstance(wc_coupon_lines, list):
+            return jsonify({"msg": "Error: formato de respuesta inesperado"}), 400
+
+        for wc_coupon_line in wc_coupon_lines:
+            existing_coupon_line = CouponLine.query.filter_by(id=wc_coupon_line["id"]).first()
+
+            if existing_coupon_line:
+                existing_coupon_line.code = wc_coupon_line["code"]
+                existing_coupon_line.discount = wc_coupon_line["discount"]
+                existing_coupon_line.discount_tax = wc_coupon_line["discount_tax"]
+            else:
+                new_coupon_line = CouponLine(
+                    id=wc_coupon_line["id"],
+                    code=wc_coupon_line["code"],
+                    discount=wc_coupon_line["discount"],
+                    discount_tax=wc_coupon_line["discount_tax"]
+                )
+                db.session.add(new_coupon_line)
+
+        db.session.commit()
+        return jsonify({"msg": "Coupon lines importados y actualizados correctamente"}), 200
+
+    except Exception as e:
+        return jsonify({"msg": f"Error al importar coupon lines: {str(e)}"}), 500
+
+@api.route("/import_refunds", methods=["GET"])
+def import_refunds():
+    try:
+        response = wcapi.get("refunds", params={"timeout": 30})
+        
+        if response.status_code != 200:
+            return jsonify({"msg": f"Error al importar refunds: {response.text}"}), 401
+        
+        wc_refunds = response.json()
+
+        if not isinstance(wc_refunds, list):
+            return jsonify({"msg": "Error: formato de respuesta inesperado"}), 400
+
+        for wc_refund in wc_refunds:
+            existing_refund = Refund.query.filter_by(id=wc_refund["id"]).first()
+
+            if existing_refund:
+                existing_refund.reason = wc_refund["reason"]
+                existing_refund.total = wc_refund["total"]
+            else:
+                new_refund = Refund(
+                    id=wc_refund["id"],
+                    reason=wc_refund["reason"],
+                    total=wc_refund["total"]
+                )
+                db.session.add(new_refund)
+
+        db.session.commit()
+        return jsonify({"msg": "Refunds importados y actualizados correctamente"}), 200
+
+    except Exception as e:
+        return jsonify({"msg": f"Error al importar refunds: {str(e)}"}), 500
+
+@api.route('/customers/<int:customer_id>', methods=['GET'])
+def customer_detail(customer_id):
+    try:
+        customer = Customer.query.get_or_404(customer_id)
+        return jsonify(customer.serialize()), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
-@api.route("/login", methods=["POST"])   
+
+@api.route('/api/customers', methods=['GET'])
+def get_customers():
+    try:
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 25, type=int)
+        customers_query = Customer.query.paginate(page, limit, False)
+        
+        customers = customers_query.items
+        total_pages = customers_query.pages
+        
+        return jsonify({
+            "customers": [customer.serialize() for customer in customers],
+            "totalPages": total_pages
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@api.route("/login", methods=["POST"])
 def login():
     email = request.json.get("email", None)
     password = request.json.get("password", None)
@@ -197,102 +499,3 @@ def login():
 
     access_token = create_access_token(identity=email)
     return jsonify(access_token=access_token)
-
-# @api.route("/signup", methods=["POST"])
-# def signup():
-#     body = request.get_json()
-#     user = User.query.filter_by(email=body["email"]).first()
-    
-#     if user is None:
-#         user = User(email=body["email"], password=body["password"], is_active=False)
-#         db.session.add(user)
-#         db.session.commit()
-#         response_body = {
-#             "msg": "Usuario creado"
-#         }
-#         return jsonify(response_body), 200
-#     else:
-#         return jsonify({"msg": "Ya tenemos fichado un cliente con ese correo"}), 401
-
-@api.route("/import_orders", methods=["GET"])
-def import_orders():
-    try:
-        # Obtener órdenes de WooCommerce con un tiempo de espera aumentado
-        response = wcapi.get("orders", timeout=30)  # Aumenta el tiempo de espera a 30 segundos
-        
-        # Verifica si la respuesta es exitosa
-        if response.status_code != 200:
-            return jsonify({"msg": f"Error al importar órdenes: {response.text}"}), 401
-        
-        wc_orders = response.json()
-
-        # Verifica que wc_orders sea una lista
-        if not isinstance(wc_orders, list):
-            return jsonify({"msg": "Error: formato de respuesta inesperado"}), 400
-
-        for wc_order in wc_orders:
-            # Verificar si la orden ya existe en la base de datos
-            existing_order = Order.query.filter_by(id=wc_order["id"]).first()
-
-            if existing_order:
-                # Actualizar la orden existente
-                existing_order.parent_id = wc_order.get("parent_id", 0)
-                existing_order.number = wc_order["number"]
-                existing_order.order_key = wc_order["order_key"]
-                existing_order.created_via = wc_order["created_via"]
-                existing_order.status = wc_order["status"]
-                existing_order.date_created = wc_order["date_created"]
-                existing_order.discount_total = wc_order["discount_total"]
-                existing_order.discount_tax = wc_order["discount_tax"]
-                existing_order.shipping_total = wc_order["shipping_total"]
-                existing_order.total = wc_order["total"]
-                existing_order.customer_id = str(wc_order["customer_id"])
-                existing_order.payment_method = wc_order["payment_method"]
-                existing_order.total_tax = wc_order["total_tax"]
-            else:
-                # Crear y guardar la nueva orden en la base de datos
-                new_order = Order(
-                    id=wc_order["id"],
-                    parent_id=wc_order.get("parent_id", 0),
-                    number=wc_order["number"],
-                    order_key=wc_order["order_key"],
-                    created_via=wc_order["created_via"],
-                    status=wc_order["status"],
-                    date_created=wc_order["date_created"],
-                    discount_total=wc_order["discount_total"],
-                    discount_tax=wc_order["discount_tax"],
-                    shipping_total=wc_order["shipping_total"],
-                    total=wc_order["total"],
-                    customer_id=str(wc_order["customer_id"]),
-                    payment_method=wc_order["payment_method"],
-                    total_tax=wc_order["total_tax"]
-                )
-                db.session.add(new_order)
-
-        db.session.commit()
-        return jsonify({"msg": "Órdenes importadas y actualizadas correctamente"}), 200
-
-    except Exception as e:
-        return jsonify({"msg": f"Error al importar órdenes: {str(e)}"}), 500
-    
-
-
-@api.route('/customers/<int:customer_id>', methods=['GET'])
-def customer_detail(customer_id):
-    try:
-        customer = Customer.query.get_or_404(customer_id)
-        return jsonify(customer.serialize()), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-@api.route('/api/customers', methods=['GET'])
-def get_customers():
-    customers = Customer.query.all()
-    return jsonify([customer.serialize() for customer in customers]), 200
-    
-# @api.route("/orders", methods=["GET"])
-# def get_orders():
-#     orders = Order.query.all()
-#     orders_serialized = [order.serialize() for order in orders]
-#     return jsonify(orders_serialized), 200
-
