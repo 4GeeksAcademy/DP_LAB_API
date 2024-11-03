@@ -28,3 +28,6 @@ table tr:hover {
 table a {
     display: table-row;
 }
+p{
+    font-weight: 200;
+}

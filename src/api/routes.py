@@ -20,7 +20,8 @@ wcapi = API(
     url="https://piedrapapelytijeras.es",  
     consumer_key=consumer_key,  
     consumer_secret=consumer_secret, 
-    version="wc/v3"
+    version="wc/v3",
+    timeout=30
 )
 
 @api.route("/import_customers", methods=["GET"])
@@ -145,76 +146,77 @@ def import_orders():
             return jsonify({"msg": "Error: formato de respuesta inesperado"}), 400
 
         for wc_order in wc_orders:
+            customer_id = wc_order["customer_id"]
+            customer = Customer.query.filter_by(id=customer_id).first()
+
+            if not customer:
+                # Si el cliente no existe, omitir la orden o crear un nuevo cliente
+                continue
+
             existing_order = Order.query.filter_by(id=wc_order["id"]).first()
 
+            billing_info = wc_order.get("billing", {})
+            shipping_info = wc_order.get("shipping", {})
+
+            if billing_info:
+                billing = Billing.query.filter_by(
+                    first_name=billing_info["first_name"],
+                    last_name=billing_info["last_name"],
+                    address_1=billing_info["address_1"]
+                ).first()
+                if not billing:
+                    billing = Billing(
+                        first_name=billing_info["first_name"],
+                        last_name=billing_info["last_name"],
+                        company=billing_info.get("company"),
+                        address_1=billing_info.get("address_1", ""),
+                        address_2=billing_info.get("address_2", ""),
+                        city=billing_info.get("city", ""),
+                        state=billing_info.get("state", ""),
+                        postcode=billing_info.get("postcode", ""),
+                        country=billing_info.get("country", ""),
+                        email=billing_info.get("email", ""),
+                        phone=billing_info.get("phone", "")
+                    )
+                    db.session.add(billing)
+
+            if shipping_info:
+                shipping = Shipping.query.filter_by(
+                    first_name=shipping_info["first_name"],
+                    last_name=shipping_info["last_name"],
+                    address_1=shipping_info["address_1"]
+                ).first()
+                if not shipping:
+                    shipping = Shipping(
+                        first_name=shipping_info["first_name"],
+                        last_name=shipping_info["last_name"],
+                        company=shipping_info.get("company"),
+                        address_1=shipping_info.get("address_1", ""),
+                        address_2=shipping_info.get("address_2", ""),
+                        city=shipping_info.get("city", ""),
+                        state=shipping_info.get("state", ""),
+                        postcode=shipping_info.get("postcode", ""),
+                        country=shipping_info.get("country", "")
+                    )
+                    db.session.add(shipping)
+
+
             if existing_order:
-                existing_order.parent_id = wc_order.get("parent_id", 0)
                 existing_order.number = wc_order["number"]
-                existing_order.order_key = wc_order["order_key"]
-                existing_order.created_via = wc_order["created_via"]
-                existing_order.version = wc_order["version"]
                 existing_order.status = wc_order["status"]
-                existing_order.currency = wc_order["currency"]
-                existing_order.date_modified = wc_order.get("date_modified")
-                existing_order.date_modified_gmt = wc_order.get("date_modified_gmt")
-                existing_order.discount_total = wc_order["discount_total"]
-                existing_order.discount_tax = wc_order["discount_tax"]
-                existing_order.shipping_total = wc_order["shipping_total"]
-                existing_order.shipping_tax = wc_order.get("shipping_tax")
-                existing_order.cart_tax = wc_order.get("cart_tax")
                 existing_order.total = wc_order["total"]
-                existing_order.total_tax = wc_order["total_tax"]
-                existing_order.prices_include_tax = wc_order["prices_include_tax"]
                 existing_order.customer_id = wc_order["customer_id"]
-                existing_order.customer_ip_address = wc_order.get("customer_ip_address")
-                existing_order.customer_user_agent = wc_order.get("customer_user_agent")
-                existing_order.customer_note = wc_order.get("customer_note")
-                existing_order.payment_method = wc_order["payment_method"]
-                existing_order.payment_method_title = wc_order.get("payment_method_title")
-                existing_order.transaction_id = wc_order.get("transaction_id")
-                existing_order.date_paid = wc_order.get("date_paid")
-                existing_order.date_paid_gmt = wc_order.get("date_paid_gmt")
-                existing_order.date_completed = wc_order.get("date_completed")
-                existing_order.date_completed_gmt = wc_order.get("date_completed_gmt")
-                existing_order.cart_hash = wc_order.get("cart_hash")
-                existing_order.set_paid = wc_order["set_paid"]
-                existing_order.billing_id = wc_order.get("billing_id")
-                existing_order.shipping_id = wc_order.get("shipping_id")
+                existing_order.billing = billing
+                existing_order.shipping = shipping
             else:
                 new_order = Order(
                     id=wc_order["id"],
-                    parent_id=wc_order.get("parent_id", 0),
                     number=wc_order["number"],
-                    order_key=wc_order["order_key"],
-                    created_via=wc_order["created_via"],
-                    version=wc_order["version"],
                     status=wc_order["status"],
-                    currency=wc_order["currency"],
-                    date_modified=wc_order.get("date_modified"),
-                    date_modified_gmt=wc_order.get("date_modified_gmt"),
-                    discount_total=wc_order["discount_total"],
-                    discount_tax=wc_order["discount_tax"],
-                    shipping_total=wc_order["shipping_total"],
-                    shipping_tax=wc_order.get("shipping_tax"),
-                    cart_tax=wc_order.get("cart_tax"),
                     total=wc_order["total"],
-                    total_tax=wc_order["total_tax"],
-                    prices_include_tax=wc_order["prices_include_tax"],
                     customer_id=wc_order["customer_id"],
-                    customer_ip_address=wc_order.get("customer_ip_address"),
-                    customer_user_agent=wc_order.get("customer_user_agent"),
-                    customer_note=wc_order.get("customer_note"),
-                    payment_method=wc_order["payment_method"],
-                    payment_method_title=wc_order.get("payment_method_title"),
-                    transaction_id=wc_order.get("transaction_id"),
-                    date_paid=wc_order.get("date_paid"),
-                    date_paid_gmt=wc_order.get("date_paid_gmt"),
-                    date_completed=wc_order.get("date_completed"),
-                    date_completed_gmt=wc_order.get("date_completed_gmt"),
-                    cart_hash=wc_order.get("cart_hash"),
-                    set_paid=wc_order["set_paid"],
-                    billing_id=wc_order.get("billing_id"),
-                    shipping_id=wc_order.get("shipping_id")
+                    billing=billing,
+                    shipping=shipping
                 )
                 db.session.add(new_order)
 
@@ -223,7 +225,7 @@ def import_orders():
 
     except Exception as e:
         return jsonify({"msg": f"Error al importar órdenes: {str(e)}"}), 500
-
+    
 @api.route("/import_line_items", methods=["GET"])
 def import_line_items():
     try:
@@ -467,6 +469,14 @@ def customer_detail(customer_id):
         return jsonify(customer.serialize()), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@api.route('/api/orders', methods=['GET'])
+def get_orders():
+    try:
+        orders = Order.query.all()
+        return jsonify([order.serialize() for order in orders]), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500    
 
 @api.route('/api/customers', methods=['GET'])
 def get_customers():

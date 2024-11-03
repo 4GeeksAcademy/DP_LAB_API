@@ -1,8 +1,8 @@
 """empty message
 
-Revision ID: 21c0be0a3151
+Revision ID: 524e5316e944
 Revises: 
-Create Date: 2024-11-02 09:11:57.756696
+Create Date: 2024-11-03 09:45:15.700833
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '21c0be0a3151'
+revision = '524e5316e944'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -59,6 +59,7 @@ def upgrade():
     sa.Column('email', sa.String(length=120), nullable=False),
     sa.Column('first_name', sa.String(length=120), nullable=False),
     sa.Column('last_name', sa.String(length=120), nullable=False),
+    sa.Column('company', sa.String(length=120), nullable=True),
     sa.Column('role', sa.String(length=120), nullable=True),
     sa.Column('username', sa.String(length=120), nullable=False),
     sa.Column('password', sa.String(length=80), nullable=False),
@@ -73,36 +74,10 @@ def upgrade():
     )
     op.create_table('order',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('parent_id', sa.Integer(), nullable=False),
     sa.Column('number', sa.String(length=80), nullable=False),
-    sa.Column('order_key', sa.String(length=80), nullable=False),
-    sa.Column('created_via', sa.String(length=80), nullable=False),
-    sa.Column('version', sa.String(length=80), nullable=False),
     sa.Column('status', sa.String(length=80), nullable=False),
-    sa.Column('currency', sa.String(length=3), nullable=False),
-    sa.Column('date_modified', sa.DateTime(), nullable=True),
-    sa.Column('date_modified_gmt', sa.DateTime(), nullable=True),
-    sa.Column('discount_total', sa.String(length=80), nullable=False),
-    sa.Column('discount_tax', sa.String(length=80), nullable=False),
-    sa.Column('shipping_total', sa.String(length=80), nullable=False),
-    sa.Column('shipping_tax', sa.String(length=80), nullable=False),
-    sa.Column('cart_tax', sa.String(length=80), nullable=False),
     sa.Column('total', sa.String(length=80), nullable=False),
-    sa.Column('total_tax', sa.String(length=80), nullable=False),
-    sa.Column('prices_include_tax', sa.Boolean(), nullable=True),
     sa.Column('customer_id', sa.Integer(), nullable=False),
-    sa.Column('customer_ip_address', sa.String(length=45), nullable=False),
-    sa.Column('customer_user_agent', sa.String(length=255), nullable=False),
-    sa.Column('customer_note', sa.Text(), nullable=True),
-    sa.Column('payment_method', sa.String(length=80), nullable=False),
-    sa.Column('payment_method_title', sa.String(length=80), nullable=False),
-    sa.Column('transaction_id', sa.String(length=80), nullable=False),
-    sa.Column('date_paid', sa.DateTime(), nullable=True),
-    sa.Column('date_paid_gmt', sa.DateTime(), nullable=True),
-    sa.Column('date_completed', sa.DateTime(), nullable=True),
-    sa.Column('date_completed_gmt', sa.DateTime(), nullable=True),
-    sa.Column('cart_hash', sa.String(length=32), nullable=False),
-    sa.Column('set_paid', sa.Boolean(), nullable=True),
     sa.Column('billing_id', sa.Integer(), nullable=True),
     sa.Column('shipping_id', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['billing_id'], ['billing.id'], ),
@@ -115,7 +90,7 @@ def upgrade():
     sa.Column('order_id', sa.Integer(), nullable=False),
     sa.Column('code', sa.String(length=80), nullable=False),
     sa.Column('discount', sa.String(length=80), nullable=False),
-    sa.Column('discount_tax', sa.String(length=80), nullable=False),
+    sa.Column('discount_tax', sa.String(length=80), nullable=True),
     sa.ForeignKeyConstraint(['order_id'], ['order.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -126,7 +101,7 @@ def upgrade():
     sa.Column('tax_class', sa.String(length=80), nullable=True),
     sa.Column('tax_status', sa.String(length=80), nullable=False),
     sa.Column('total', sa.String(length=80), nullable=False),
-    sa.Column('total_tax', sa.String(length=80), nullable=False),
+    sa.Column('total_tax', sa.String(length=80), nullable=True),
     sa.ForeignKeyConstraint(['order_id'], ['order.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -144,6 +119,8 @@ def upgrade():
     sa.Column('total_tax', sa.String(length=80), nullable=False),
     sa.Column('sku', sa.String(length=80), nullable=True),
     sa.Column('price', sa.String(length=80), nullable=True),
+    sa.Column('image', sa.String(length=255), nullable=True),
+    sa.Column('meta_data', sa.JSON(), nullable=True),
     sa.ForeignKeyConstraint(['order_id'], ['order.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -161,7 +138,7 @@ def upgrade():
     sa.Column('method_title', sa.String(length=80), nullable=False),
     sa.Column('method_id', sa.String(length=80), nullable=False),
     sa.Column('total', sa.String(length=80), nullable=False),
-    sa.Column('total_tax', sa.String(length=80), nullable=False),
+    sa.Column('total_tax', sa.String(length=80), nullable=True),
     sa.ForeignKeyConstraint(['order_id'], ['order.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -173,7 +150,7 @@ def upgrade():
     sa.Column('label', sa.String(length=80), nullable=False),
     sa.Column('compound', sa.Boolean(), nullable=False),
     sa.Column('tax_total', sa.String(length=80), nullable=False),
-    sa.Column('shipping_tax_total', sa.String(length=80), nullable=False),
+    sa.Column('shipping_tax_total', sa.String(length=80), nullable=True),
     sa.ForeignKeyConstraint(['order_id'], ['order.id'], ),
     sa.PrimaryKeyConstraint('id')
     )

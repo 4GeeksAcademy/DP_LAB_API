@@ -8,6 +8,7 @@ class Customer(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     first_name = db.Column(db.String(120), nullable=False)
     last_name = db.Column(db.String(120), nullable=False)
+    company = db.Column(db.String(120), nullable=True)
     role = db.Column(db.String(120), default="customer")
     username = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(80), nullable=False)
@@ -16,114 +17,48 @@ class Customer(db.Model):
     shipping_id = db.Column(db.Integer, db.ForeignKey('shipping.id'), nullable=True)
     billing = db.relationship('Billing', backref='customer', uselist=False)
     shipping = db.relationship('Shipping', backref='customer', uselist=False)
-    orders = db.relationship('Order', backref='customer', lazy='dynamic')
+    orders = db.relationship('Order', back_populates='customer', lazy='dynamic')
 
     def serialize(self):
         return {
             "id": self.id,
             "email": self.email,
             "first_name": self.first_name,
+            "company": self.company,
             "last_name": self.last_name,
             "role": self.role,
             "username": self.username,
             "is_paying_customer": self.is_paying_customer,
             "billing": self.billing.serialize() if self.billing else None,
             "shipping": self.shipping.serialize() if self.shipping else None,
-            "orders": [order.serialize() for order in self.orders] if self.orders else []
+            "orders": [order.serialize() for order in self.orders]
         }
 
 class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    parent_id = db.Column(db.Integer, nullable=False)
     number = db.Column(db.String(80), nullable=False)
-    order_key = db.Column(db.String(80), nullable=False)
-    created_via = db.Column(db.String(80), nullable=False)
-    version = db.Column(db.String(80), nullable=False)
     status = db.Column(db.String(80), nullable=False, default='pending')
-    currency = db.Column(db.String(3), nullable=False, default='EUR')
-    date_modified = db.Column(db.DateTime, onupdate=func.now(), nullable=True)
-    date_modified_gmt = db.Column(db.DateTime, onupdate=func.now(), nullable=True)
-    discount_total = db.Column(db.String(80), nullable=False)
-    discount_tax = db.Column(db.String(80), nullable=False)
-    shipping_total = db.Column(db.String(80), nullable=False)
-    shipping_tax = db.Column(db.String(80), nullable=True)
-    cart_tax = db.Column(db.String(80), nullable=True)
     total = db.Column(db.String(80), nullable=False)
-    total_tax = db.Column(db.String(80), nullable=False)
-    prices_include_tax = db.Column(db.Boolean, default=False)
     customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=False)
-    customer_ip_address = db.Column(db.String(45), nullable=True)
-    customer_user_agent = db.Column(db.String(255), nullable=True)
-    customer_note = db.Column(db.Text, nullable=True)
-    payment_method = db.Column(db.String(80), nullable=False)
-    payment_method_title = db.Column(db.String(80), nullable=True)
-    transaction_id = db.Column(db.String(80), nullable=True)
-    date_paid = db.Column(db.DateTime, nullable=True)
-    date_paid_gmt = db.Column(db.DateTime, nullable=True)
-    date_completed = db.Column(db.DateTime, nullable=True)
-    date_completed_gmt = db.Column(db.DateTime, nullable=True)
-    cart_hash = db.Column(db.String(32), nullable=True)
-    set_paid = db.Column(db.Boolean, default=False)
-
     billing_id = db.Column(db.Integer, db.ForeignKey('billing.id'), nullable=True)
     shipping_id = db.Column(db.Integer, db.ForeignKey('shipping.id'), nullable=True)
-    billing = db.relationship('Billing', backref='orders', uselist=False)
-    shipping = db.relationship('Shipping', backref='orders', uselist=False)
-
-    line_items = db.relationship('LineItem', backref='order', lazy='dynamic')
-    tax_lines = db.relationship('TaxLine', backref='order', lazy='dynamic')
-    shipping_lines = db.relationship('ShippingLine', backref='order', lazy='dynamic')
-    fee_lines = db.relationship('FeeLine', backref='order', lazy='dynamic')
-    coupon_lines = db.relationship('CouponLine', backref='order', lazy='dynamic')
-    refunds = db.relationship('Refund', backref='order', lazy='dynamic')
-
-    def __repr__(self):
-        return f'<Order {self.number}>'
+    customer = db.relationship('Customer', back_populates='orders')
+    billing = db.relationship('Billing', backref='order_billing')
+    shipping = db.relationship('Shipping', backref='order_shipping')
 
     def serialize(self):
         return {
             "id": self.id,
-            "parent_id": self.parent_id,
             "number": self.number,
-            "order_key": self.order_key,
-            "created_via": self.created_via,
-            "version": self.version,
             "status": self.status,
-            "currency": self.currency,
-            "date_modified": self.date_modified,
-            "date_modified_gmt": self.date_modified_gmt,
-            "discount_total": self.discount_total,
-            "discount_tax": self.discount_tax,
-            "shipping_total": self.shipping_total,
-            "shipping_tax": self.shipping_tax,
-            "cart_tax": self.cart_tax,
             "total": self.total,
-            "total_tax": self.total_tax,
-            "prices_include_tax": self.prices_include_tax,
             "customer_id": self.customer_id,
-            "customer_ip_address": self.customer_ip_address,
-            "customer_user_agent": self.customer_user_agent,
-            "customer_note": self.customer_note,
-            "payment_method": self.payment_method,
-            "payment_method_title": self.payment_method_title,
-            "transaction_id": self.transaction_id,
-            "date_paid": self.date_paid,
-            "date_paid_gmt": self.date_paid_gmt,
-            "date_completed": self.date_completed,
-            "date_completed_gmt": self.date_completed_gmt,
-            "cart_hash": self.cart_hash,
-            "set_paid": self.set_paid,
+            "billing_id": self.billing_id,
+            "shipping_id": self.shipping_id,
             "billing": self.billing.serialize() if self.billing else None,
-            "shipping": self.shipping.serialize() if self.shipping else None,
-            "customer": self.customer.serialize() if self.customer else None,
-            "line_items": [item.serialize() for item in self.line_items],
-            "tax_lines": [tax.serialize() for tax in self.tax_lines],
-            "shipping_lines": [shipping.serialize() for shipping in self.shipping_lines],
-            "fee_lines": [fee.serialize() for fee in self.fee_lines],
-            "coupon_lines": [coupon.serialize() for coupon in self.coupon_lines],
-            "refunds": [refund.serialize() for refund in self.refunds]
+            "shipping": self.shipping.serialize() if self.shipping else None
         }
-
+    
 class Billing(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     first_name = db.Column(db.String(120), nullable=False)
@@ -152,7 +87,7 @@ class Billing(db.Model):
             "email": self.email,
             "phone": self.phone
         }
-    
+
 class LineItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
@@ -167,6 +102,8 @@ class LineItem(db.Model):
     total_tax = db.Column(db.String(80), nullable=False)
     sku = db.Column(db.String(80), nullable=True)
     price = db.Column(db.String(80), nullable=True)
+    image = db.Column(db.String(255), nullable=True)  # URL de la imagen
+    meta_data = db.Column(db.JSON, nullable=True)  # Para guardar la metadata si es necesario.
 
     def serialize(self):
         return {
@@ -182,9 +119,11 @@ class LineItem(db.Model):
             "total": self.total,
             "total_tax": self.total_tax,
             "sku": self.sku,
-            "price": self.price
+            "price": self.price,
+            "image": self.image,
+            "meta_data": self.meta_data
         }
-    
+
 class TaxLine(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
@@ -206,7 +145,7 @@ class TaxLine(db.Model):
             "tax_total": self.tax_total,
             "shipping_tax_total": self.shipping_tax_total
         }
-    
+
 class CouponLine(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
@@ -313,6 +252,4 @@ class User(db.Model):
         return {
             "id": self.id,
             "email": self.email,
-           
         }
-

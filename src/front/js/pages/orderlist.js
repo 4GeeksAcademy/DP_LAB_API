@@ -7,12 +7,8 @@ const Orders = () => {
     useEffect(() => {
         const fetchOrders = async () => {
             try {
-                const token = localStorage.getItem("access_token");  // Asegúrate de que el token esté almacenado
-                const response = await axios.get('http://localhost:5000/api/orders', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
+
+                const response = await axios.get(`${process.env.BACKEND_URL}/api/orders`);
                 setOrders(response.data);
             } catch (error) {
                 console.error("Error fetching orders", error);
@@ -24,11 +20,11 @@ const Orders = () => {
 
     return (
         <div>
-            <h1>Orders</h1>
+            <h1>Pedidos</h1>
             <ul>
                 {orders.map(order => (
                     <li key={order.id}>
-                        Order Number: {order.number} - Total: {order.total}
+                        Número de Orden: {order.number} - Total: {order.total}
                     </li>
                 ))}
             </ul>
