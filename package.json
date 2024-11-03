@@ -74,11 +74,17 @@
 	},
 	"dependencies": {
 		"axios": "^1.7.7",
+		"bootstrap": "^5.3.3",
+		"cors": "^2.8.5",
+		"html2canvas": "^1.4.1",
+		"jspdf": "^2.5.2",
 		"prop-types": "^15.6.1",
 		"react": "^16.8.4",
+		"react-bootstrap": "^2.10.5",
 		"react-dom": "^16.8.4",
 		"react-polyfills": "0.0.1",
-		"react-router-dom": "^6.3.0",
+		"react-router-dom": "^6.27.0",
+		"react-to-print": "^3.0.2",
 		"woocommerce": "^2.4.0"
 	}
 }
